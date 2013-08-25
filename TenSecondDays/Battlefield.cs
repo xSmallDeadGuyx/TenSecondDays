@@ -14,17 +14,17 @@ namespace TenSecondDays {
 		public Vector2 position;
 		public Vector2 velocity;
 		public Vector2 acceleration;
-		public int shootTimer;
+		public int shootTimer = 0;
 		public int maxX;
 
-		public Enemy(Vector2 p, Vector2 v, int s) {
+		public Enemy(Vector2 p, Vector2 v) {
 			position = p;
 			velocity = v;
-			shootTimer = s;
 
 			maxX = 180 + (int) (Battlefield.rand.NextDouble() * 20);
 		}
 	}
+
 	public class PlayerBullet {
 		public Vector2 position;
 		public float angle;
@@ -84,13 +84,14 @@ namespace TenSecondDays {
 		private static Texture2D playerTexture;
 		private static Texture2D gunTexture;
 		public static Texture2D bulletTexture;
-		private static Texture2D enemyBaseTexture;
-		private static Texture2D enemyGunTexture;
+		public static Texture2D enemyBaseTexture;
+		public static Texture2D enemyGunTexture;
 		private static Texture2D enemyImplodingTexture;
-		private static Texture2D sunTexture;
-		private static Texture2D overlayTexture;
+		public static Texture2D sunTexture;
+		public static Texture2D overlayTexture;
 
 		public static FontRenderer fontRenderer;
+		public static FontRenderer smallFontRenderer;
 		private static SoundEffectInstance shoot;
 
 		public static Random rand = new Random();
@@ -118,6 +119,7 @@ namespace TenSecondDays {
 		};
 
 		int sandbagsHealth = 100;
+		int lastLevelHealth = 100;
 		int timeSurvived = -600;
 		int loseTimer = 0;
 
@@ -142,6 +144,8 @@ namespace TenSecondDays {
 			overlayTexture = content.Load<Texture2D>("overlay");
 
 			fontRenderer = new FontRenderer(FontLoader.Load(Path.Combine(content.RootDirectory, "font.fnt")), content.Load<Texture2D>("font_0"), spriteBatch);
+			smallFontRenderer = new FontRenderer(FontLoader.Load(Path.Combine(content.RootDirectory, "small_font.fnt")), content.Load<Texture2D>("small_font_0"), spriteBatch);
+
 			SoundEffect shootEffect = content.Load<SoundEffect>("shoot");
 			shoot = shootEffect.CreateInstance();
 			shoot.Volume = 0.2f;
@@ -150,6 +154,16 @@ namespace TenSecondDays {
 		public void update() {
 			if(sandbagsHealth <= 0) {
 				loseTimer++;
+				if(loseTimer >= 150) {
+					loseTimer = 0;
+					sandbagsHealth = lastLevelHealth;
+					timeSurvived = (timeSurvived / 1200) * 1200;
+
+					enemies.Clear();
+					implodingEnemies.Clear();
+					playerBullets.Clear();
+					enemyBullets.Clear();
+				}
 				return;
 			}
 
@@ -157,6 +171,8 @@ namespace TenSecondDays {
 			if(timeSurvived >= 14400)
 				return;
 			if(timeSurvived % 1200 == 0) {
+				lastLevelHealth = sandbagsHealth;
+
 				enemyCount += 2;
 				if(timeSurvived % 3600 == 0)
 					enemyCount++;
@@ -171,7 +187,7 @@ namespace TenSecondDays {
 			}
 
 			if(timeSurvived >= 0 && timeSurvived % 1200 < 450 && timeSurvived % (450 / enemyCount) == 0)
-				enemies.Add(new Enemy(new Vector2(-100, (int) (108 * rand.NextDouble())), velocity * Vector2.UnitX, 0));
+				enemies.Add(new Enemy(new Vector2(-100, (int) (108 * rand.NextDouble())), velocity * Vector2.UnitX));
 
 			prevMouseState = mouse;
 			mouse = Mouse.GetState();
@@ -186,7 +202,9 @@ namespace TenSecondDays {
 				PlayerBullet b = new PlayerBullet(new Vector2(288f, 106f), (float) (Math.PI + gunRotation), Color.White, enemies);
 				playerBullets.Add(b);
 
-				shoot.Play();
+				if(TenSecondDays.sound)
+					shoot.Play();
+				
 				if(b.hit) {
 					implodingEnemies.Add(new EnemyImploding(b.enemyHit.position));
 					enemies.Remove(b.enemyHit);
@@ -214,7 +232,8 @@ namespace TenSecondDays {
 						enemyBullets.Add(new EnemyBullet(enemies[i].position + new Vector2(6, 6)));
 						sandbagsHealth--;
 
-						shoot.Play();
+						if(TenSecondDays.sound)
+							shoot.Play();
 					}
 				}
 				else {
@@ -279,6 +298,9 @@ namespace TenSecondDays {
 				spriteBatch.Draw(enemyGunTexture, new Rectangle((int) e.position.X + 6, (int) e.position.Y + 6, 5, 2), new Rectangle(0, 0, 5, 2), Color.White, (float) Math.Atan2(108 - e.position.Y, 254 - e.position.X), new Vector2(0, 1), SpriteEffects.None, 0);
 			}
 
+			string dayString = "Day " + (timeSurvived / 1200 + 1);
+			smallFontRenderer.DrawText(360 - smallFontRenderer.GetTextWidth(dayString), 8, dayString, Color.Black);
+
 			spriteBatch.Draw(overlayTexture, new Rectangle(0, 0, 368, 128), new Color(0f, 0f, 0f, timeSurvived % 1200 < 600 ? (float) Math.Abs(300 - timeSurvived % 600) / 600f : 1f - (float) Math.Abs(300 - timeSurvived % 600) / 600f));
 
 			if(timeSurvived < 0 || timeSurvived % 1200 >= 600) {
@@ -286,10 +308,8 @@ namespace TenSecondDays {
 				fontRenderer.DrawCenteredText(184, 64, 250, storyPart, new Color(1f, 1f, 1f, timeSurvived % 1200 < 600 ? (float) Math.Abs(300 - timeSurvived % 600) / 600f : 1f - (float) Math.Abs(300 - timeSurvived % 600) / 600f));
 			}
 
-			if(sandbagsHealth <= 0) {
+			if(sandbagsHealth <= 0)
 				spriteBatch.Draw(overlayTexture, new Rectangle(0, 0, 368, 128), new Color(1f, 0f, 0f, Math.Min(1f, loseTimer / 60f)));
-				fontRenderer.DrawCenteredText(184, 64, 250, "You lose...", new Color(1f, 1f, 1f, timeSurvived % 1200 < 600 ? (float) Math.Abs(300 - timeSurvived % 600) / 600f : 1f - (float) Math.Abs(300 - timeSurvived % 600) / 600f));
-			}
 		}
 	}
 }
